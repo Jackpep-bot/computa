@@ -1,0 +1,5 @@
+# Core computa runs with ZERO dependencies (standard library only).
+# psutil is optional but strongly recommended: it unlocks live CPU/memory,
+# swap, boot-time/uptime and per-process detail. Without it, computa still
+# reports platform info, disk usage and cache/temp sizing.
+psutil>=5.9
