@@ -163,8 +163,11 @@ def _cmd_menu(args) -> int:
             choice = input("Enter choice: ").strip().lower()
         except EOFError:
             return 0
-        if choice in ("q", "quit", "exit", ""):
+        if choice in ("q", "quit", "exit"):
             return 0
+        if choice == "":
+            # A stray blank line (e.g. from a paste) shouldn't quit — re-show.
+            continue
         print()
         if choice == "1":
             _cmd_scan(argparse.Namespace(json=False, fast=False, advice=True))
