@@ -64,6 +64,7 @@ function Show-Menu {
     Write-Host '  DIAGNOSE (read-only)'
     Write-Host '   2) Diagnose - full health report'
     Write-Host '   3) Health summary (copy back for advice)'
+    Write-Host '   a) Upgrade advisor - best hardware upgrade for your PC + how-to'
     Write-Host '   4) Disk map - biggest files/folders        [heavy scan]'
     Write-Host '   5) Profile bloat - biggest profile folders'
     Write-Host '   6) Find clutter - big/stale/duplicate files [heavy scan]'
@@ -92,6 +93,7 @@ while ($true) {
         '1'  { Invoke-Script 'restore-point.ps1'; $script:RestoreDone = $true }
         '2'  { Invoke-Script 'diagnose.ps1' }
         '3'  { Invoke-Script 'health-report.ps1' }
+        'a'  { Invoke-Script 'upgrade-advisor.ps1' }
         '4'  { if (Confirm-HeavyScan) { $p = Read-Host 'Folder to scan (Enter for C:\)'; if ([string]::IsNullOrWhiteSpace($p)) { $p = 'C:\' }; Invoke-Script 'disk-map.ps1' @{ Path = $p } } }
         '5'  { Invoke-Script 'profile-bloat.ps1' }
         '6'  { if (Confirm-HeavyScan) { $p = Read-Host 'Folder to scan (Enter for your profile)'; if ([string]::IsNullOrWhiteSpace($p)) { $p = $env:USERPROFILE }; Invoke-Script 'find-clutter.ps1' @{ Path = $p } } }
