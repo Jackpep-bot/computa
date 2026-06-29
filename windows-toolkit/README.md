@@ -100,6 +100,19 @@ you to back up first**.
   `SFC /VERIFYONLY` (read-only) and reports whether corruption was found; with
   `-Confirm` runs DISM `/RestoreHealth` and `SFC /SCANNOW`. Needs admin.
 
+### Maintain
+- **update.ps1** `[-Token <pat>]` — updates the toolkit **in place**: pulls the
+  latest scripts from GitHub straight into this folder (auto-discovering new
+  ones), so you never re-download the ZIP. Skips your `logs\` and inventory.
+  Works on a public repo with no setup; for a private repo pass a `-Token`.
+- **safe-sweep.ps1** `[-All] [-Confirm]` — clears Desktop clutter / old duplicate
+  project copies. **DRY-RUN by default.** A **failsafe** aborts the whole run and
+  reports if anything protected is ever about to be deleted — the toolkit copy
+  you're running, your `MY-PC-INVENTORY` file, system files, or anything outside
+  Desktop/Downloads. Each deletion is logged the moment it happens. Default mode
+  removes only `computa-main*` leftovers; `-All` clears the whole Desktop except
+  the protected items.
+
 ### Clean (last)
 - **cleanup.ps1** `[-Confirm]` — clears `%TEMP%`, Windows Temp, browser caches,
   Recycle Bin, and the Windows Update download cache. **DRY-RUN by default**

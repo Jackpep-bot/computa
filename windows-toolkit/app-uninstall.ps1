@@ -176,6 +176,15 @@ $candidates | Sort-Object SizeBytes -Descending |
     Format-Table -AutoSize | Out-Host
 
 foreach ($c in $candidates) {
+    # FAILSAFE: re-verify nothing protected slipped through. If it did, STOP all.
+    if (Test-Protected $c.Name $c.Publisher) {
+        Write-Log ('FAILSAFE TRIPPED: "{0}" is protected but was about to be uninstalled. STOPPING.' -f $c.Name) 'ERROR' $log
+        Write-Host ''
+        Write-Host '*** STOPPED ***' -ForegroundColor Red
+        Write-Host ('A protected program was about to be uninstalled: {0}' -f $c.Name) -ForegroundColor Red
+        Write-Host ('Nothing further was done. Log: {0}' -f $log) -ForegroundColor Yellow
+        return
+    }
     if ($Confirm) {
         Invoke-Uninstall -App $c
     } else {
