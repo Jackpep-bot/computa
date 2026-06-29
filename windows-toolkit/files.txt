@@ -1,3 +1,4 @@
+Open-Admin-Here.bat
 README.md
 Run-Toolkit.bat
 app-uninstall.ps1
