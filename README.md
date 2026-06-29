@@ -48,7 +48,7 @@ computa scan
 | `computa top`      | "What's eating my resources right now" — top CPU & memory processes (needs psutil). |
 | `computa startup`  | List **or toggle** programs that launch at login/boot (`--enable`/`--disable NAME`). |
 | `computa diff`     | Show what changed since your last scan (disk, memory, cache/temp, startup items). |
-| `computa clean`    | Reclaim cache/temp space. **Dry-run by default** — shows what *would* be removed. |
+| `computa clean`    | Reclaim cache/temp space, with a **per-app breakdown** (e.g. "Chrome: 1.2 GB"). **Dry-run by default** — shows what *would* be removed. |
 | `computa menu`     | Interactive menu — no commands to remember (what the launchers open). |
 
 Every reporting command also accepts **`--json`** for machine-readable output
@@ -133,7 +133,6 @@ python -m pytest
 
 ## Roadmap ideas
 
-- Per-app cache breakdown in `computa clean`
 - Optional Windows/macOS native checks (Windows services, Spotlight, etc.)
 
 Contributions and ideas welcome.

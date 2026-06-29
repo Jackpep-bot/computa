@@ -25,6 +25,13 @@ class CleanCandidate:
 
 
 @dataclass
+class AppUsage:
+    name: str         # the app/category (top-level folder under a cache dir)
+    size: int
+    files: int
+
+
+@dataclass
 class CleanResult:
     candidates: List[CleanCandidate]
     reclaimable: int
@@ -32,6 +39,7 @@ class CleanResult:
     removed_files: int
     errors: int
     applied: bool
+    breakdown: List[AppUsage] = None  # per-app reclaimable space
 
 
 def find_candidates(min_age_days: float = 7.0,
@@ -63,10 +71,44 @@ def find_candidates(min_age_days: float = 7.0,
     return out
 
 
+def breakdown_by_app(candidates: List[CleanCandidate],
+                     bases: List[str] = None) -> List[AppUsage]:
+    """Group reclaimable space by app/category.
+
+    The "app" is the top-level folder beneath each cache/temp base directory
+    (e.g. ``~/.cache/google-chrome`` -> "google-chrome"), which is how apps
+    name their caches on every OS. Files sitting directly in a base dir are
+    grouped as "(loose files)".
+    """
+    if bases is None:
+        bases = _temp_candidates()
+    # longest base first so nested bases match the most specific one
+    bases_norm = sorted((os.path.abspath(b) for b in bases), key=len, reverse=True)
+
+    groups = {}  # label -> [size, files]
+    for c in candidates:
+        path = os.path.abspath(c.path)
+        label = "(other)"
+        for b in bases_norm:
+            if path == b or path.startswith(b + os.sep):
+                rel = os.path.relpath(path, b)
+                parts = rel.split(os.sep)
+                label = parts[0] if len(parts) >= 2 else "(loose files)"
+                break
+        slot = groups.setdefault(label, [0, 0])
+        slot[0] += c.size
+        slot[1] += 1
+
+    usage = [AppUsage(name=k, size=v[0], files=v[1]) for k, v in groups.items()]
+    usage.sort(key=lambda a: a.size, reverse=True)
+    return usage
+
+
 def clean(min_age_days: float = 7.0, apply: bool = False) -> CleanResult:
     """Preview (default) or apply cleanup of old cache/temp files."""
     candidates = find_candidates(min_age_days=min_age_days)
     reclaimable = sum(c.size for c in candidates)
+    breakdown = breakdown_by_app(candidates)
     removed = 0
     removed_files = 0
     errors = 0
@@ -87,4 +129,5 @@ def clean(min_age_days: float = 7.0, apply: bool = False) -> CleanResult:
         removed_files=removed_files,
         errors=errors,
         applied=apply,
+        breakdown=breakdown,
     )

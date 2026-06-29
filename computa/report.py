@@ -141,7 +141,19 @@ def format_clean(result, min_age_days: float) -> str:
         lines.append(_head("Cleanup preview (dry-run — nothing deleted)"))
         lines.append(f"  {n} file(s) older than {min_age_days:g} days could be removed,")
         lines.append(f"  reclaiming about {human_bytes(result.reclaimable)}.")
-        # show the biggest offenders
+        # per-app breakdown ("Chrome cache: 1.2 GB, ...")
+        breakdown = [a for a in (result.breakdown or []) if a.size > 0]
+        if breakdown:
+            lines.append("")
+            lines.append("  By app / cache:")
+            for a in breakdown[:10]:
+                lines.append(f"    {human_bytes(a.size):>9}  "
+                             f"({a.files} files)  {a.name}")
+            if len(breakdown) > 10:
+                rest = sum(a.size for a in breakdown[10:])
+                lines.append(f"    {human_bytes(rest):>9}  "
+                             f"... and {len(breakdown) - 10} more")
+        # show the biggest individual files
         biggest = sorted(result.candidates, key=lambda c: c.size, reverse=True)[:8]
         if biggest:
             lines.append("")
