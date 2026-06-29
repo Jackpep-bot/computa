@@ -26,7 +26,9 @@ param(
     [switch]$Confirm,
     [string[]]$Only,
     [string[]]$Keep,
-    [switch]$NukeSteamLibraries
+    [switch]$NukeSteamLibraries,
+    [switch]$AutoConfirm,   # run uninstallers silently so you don't have to click
+    [switch]$AutoClick      # extra: auto-press Enter on any uninstaller window that still appears
 )
 
 . "$PSScriptRoot\lib\Common.ps1"
@@ -111,31 +113,47 @@ function Get-InstalledApps {
     $apps | Sort-Object Name -Unique
 }
 
+# Build the most-silent uninstall command we can, by detecting the installer
+# engine. This is what lets you walk away — most uninstallers can run with no UI.
+function Get-UninstallCommand {
+    param($App)
+    if ($App.QuietUninstall) { return @{ Cmd = $App.QuietUninstall; Silent = $true } }
+    $u = $App.Uninstall
+    if (-not $u) { return @{ Skip = 'no uninstall command found' } }
+    if ($u -match '(?i)steam://uninstall') { return @{ Skip = 'Steam-managed game (use -NukeSteamLibraries)' } }
+
+    if ($u -match '(?i)msiexec') {
+        $guid = $null
+        if ($App.Key -match '^\{[0-9A-Fa-f\-]+\}$') { $guid = $App.Key }
+        elseif ($u -match '(\{[0-9A-Fa-f\-]+\})') { $guid = $Matches[1] }
+        if ($guid) { return @{ Cmd = ('msiexec.exe /x {0} /qn /norestart' -f $guid); Silent = $true } }
+        return @{ Cmd = $u; Silent = $false }
+    }
+
+    $exe = Get-ExePath $u
+    $low = ([string]$exe).ToLower()
+    # Inno Setup uninstaller (unins000.exe, unins001.exe, ...)
+    if ($low -match 'unins[0-9]*\.exe$') {
+        return @{ Cmd = ('"{0}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -f $exe); Silent = $true }
+    }
+    # NSIS-style uninstaller (Uninstall.exe / uninst*.exe) supports /S
+    if ($low -match 'uninstall\.exe$' -or $low -match 'uninst[^\\]*\.exe$') {
+        return @{ Cmd = ('"{0}" /S' -f $exe); Silent = $true }
+    }
+    # Unknown engine: in AutoConfirm mode try a silent switch best-effort.
+    if ($AutoConfirm) { return @{ Cmd = ('"{0}" /S' -f $exe); Silent = $false } }
+    return @{ Cmd = $u; Silent = $false }
+}
+
 function Invoke-Uninstall {
     param($App)
-    $cmd = $App.QuietUninstall
-    $silent = $true
-    if (-not $cmd) {
-        $u = $App.Uninstall
-        if (-not $u) {
-            Write-Log ('SKIP {0}: no uninstall command found' -f $App.Name) 'WARN' $log
-            return
-        }
-        if ($u -match '(?i)steam://uninstall') {
-            Write-Log ('SKIP {0}: Steam-managed game (use -NukeSteamLibraries)' -f $App.Name) 'WARN' $log
-            return
-        }
-        if ($u -match '(?i)msiexec') {
-            $guid = $null
-            if ($App.Key -match '^\{[0-9A-Fa-f\-]+\}$') { $guid = $App.Key }
-            elseif ($u -match '(\{[0-9A-Fa-f\-]+\})') { $guid = $Matches[1] }
-            if ($guid) { $cmd = ('msiexec.exe /x {0} /qn /norestart' -f $guid) }
-            else { $cmd = $u; $silent = $false }
-        } else {
-            $cmd = $u
-            $silent = $false
-        }
+    $plan = Get-UninstallCommand -App $App
+    if ($plan.Skip) {
+        Write-Log ('SKIP {0}: {1}' -f $App.Name, $plan.Skip) 'WARN' $log
+        return
     }
+    $cmd = $plan.Cmd
+    $silent = [bool]$plan.Silent
     try {
         $p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $cmd -PassThru -Wait -WindowStyle Hidden -ErrorAction Stop
         $note = ''
@@ -175,6 +193,36 @@ $candidates | Sort-Object SizeBytes -Descending |
     Select-Object @{ N = 'Size'; E = { if ($_.SizeBytes) { Format-Size $_.SizeBytes } else { '' } } }, Name, Publisher |
     Format-Table -AutoSize | Out-Host
 
+# Optional auto-clicker: a background watcher that presses Enter on any window
+# whose title looks like an uninstaller (uninstall/setup/remove/wizard), so the
+# rare GUI uninstaller advances itself while you're away. Best-effort.
+$clickJob = $null
+if ($Confirm -and $AutoClick) {
+    Write-Log 'AutoClick on: will press Enter on uninstaller windows that appear.' 'INFO' $log
+    $clickJob = Start-Job -ScriptBlock {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public class FgWin {
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+}
+'@
+        while ($true) {
+            Start-Sleep -Milliseconds 1500
+            $h = [FgWin]::GetForegroundWindow()
+            $sb = New-Object System.Text.StringBuilder 256
+            [void][FgWin]::GetWindowText($h, $sb, 256)
+            $title = $sb.ToString()
+            if ($title -match '(?i)uninstall|setup|remove|wizard|installshield|install') {
+                [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+            }
+        }
+    }
+}
+
 foreach ($c in $candidates) {
     # FAILSAFE: re-verify nothing protected slipped through. If it did, STOP all.
     if (Test-Protected $c.Name $c.Publisher) {
@@ -183,6 +231,7 @@ foreach ($c in $candidates) {
         Write-Host '*** STOPPED ***' -ForegroundColor Red
         Write-Host ('A protected program was about to be uninstalled: {0}' -f $c.Name) -ForegroundColor Red
         Write-Host ('Nothing further was done. Log: {0}' -f $log) -ForegroundColor Yellow
+        if ($clickJob) { Stop-Job $clickJob -ErrorAction SilentlyContinue; Remove-Job $clickJob -Force -ErrorAction SilentlyContinue }
         return
     }
     if ($Confirm) {
@@ -190,6 +239,11 @@ foreach ($c in $candidates) {
     } else {
         Write-Log ('WOULD UNINSTALL {0}' -f $c.Name) 'DRYRUN' $log
     }
+}
+
+if ($clickJob) {
+    Stop-Job $clickJob -ErrorAction SilentlyContinue
+    Remove-Job $clickJob -Force -ErrorAction SilentlyContinue
 }
 
 # --- Steam game files (optional) ---

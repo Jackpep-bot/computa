@@ -111,7 +111,7 @@ while ($true) {
         '14' { Invoke-Destructive 'optimize-drives.ps1' @{} }
         '15' { Invoke-Destructive 'system-repair.ps1' @{} }
         '16' { Invoke-Destructive 'cleanup.ps1' @{} '  This will permanently delete junk files when applied.' }
-        '17' { Invoke-Destructive 'app-uninstall.ps1' @{ NukeSteamLibraries = $true } '  This UNINSTALLS all non-essential programs and DELETES Steam game files. Keeps Valorant, Claude, Chrome, Windows and drivers.' }
+        '17' { Invoke-Destructive 'app-uninstall.ps1' @{ NukeSteamLibraries = $true; AutoConfirm = $true } '  This UNINSTALLS all non-essential programs (silently where possible) and DELETES Steam game files. Keeps Valorant, Claude, Chrome, Windows and drivers.' }
         'd'  { Invoke-Destructive 'safe-sweep.ps1' @{ All = $true } '  This clears your Desktop. The toolkit folder in use and MY-PC-INVENTORY are protected; a failsafe stops everything if anything protected is touched.' }
         'q'  { Write-Host 'Bye.'; return }
         ''   { }
