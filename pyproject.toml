@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "computa"
+version = "0.1.0"
+description = "Scan your computer and get help making it run faster."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+keywords = ["system", "performance", "cleanup", "diagnostics", "cli"]
+dependencies = []
+
+[project.optional-dependencies]
+# Optional but recommended: enables live CPU/memory and per-process detail.
+full = ["psutil>=5.9"]
+dev = ["psutil>=5.9", "pytest>=7"]
+
+[project.scripts]
+computa = "computa.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["computa*"]
