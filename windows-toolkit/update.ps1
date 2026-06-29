@@ -3,12 +3,12 @@
   Update the toolkit in place — pull the latest scripts from GitHub straight
   into THIS folder, so you never have to re-download the ZIP.
 .DESCRIPTION
-  Auto-discovers every file in the repo's windows-toolkit folder (including new
-  ones) via the GitHub API and writes them into $PSScriptRoot, overwriting older
-  copies. Never touches your logs\ or MY-PC-INVENTORY files.
+  Self-contained on purpose: it does NOT depend on any other toolkit file, so it
+  works even in an empty folder (true bootstrap). Reads the repo's files.txt
+  manifest over the raw CDN (no API, no rate limits) and fetches each listed
+  file. Never touches your logs\ or MY-PC-INVENTORY files.
 
-  Public repo: works with no setup. Private repo: pass a GitHub token with
-  -Token, or make the repo public (repo Settings -> Danger Zone).
+  Public repo: works with no setup. Private repo: pass -Token.
 .PARAMETER Token
   Optional GitHub personal access token (needed only for a private repo).
 #>
@@ -18,51 +18,47 @@ param(
     [string]$Token
 )
 
-. "$PSScriptRoot\lib\Common.ps1"
-
 # Old PCs often default to TLS 1.0; GitHub needs 1.2.
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
-$log = New-ActionLog -Name 'update'
+function Say { param([string]$Msg, [string]$Color = 'Gray') Write-Host $Msg -ForegroundColor $Color }
+
 $headers = @{ 'User-Agent' = 'computa-toolkit-updater' }
 if ($Token) { $headers['Authorization'] = "token $Token" }
-
-# Pull everything via the raw CDN (no API -> no rate limits). The repo ships a
-# files.txt manifest listing every toolkit file; we read it, then fetch each.
 $base = "https://raw.githubusercontent.com/$Repo/$Branch/windows-toolkit/"
 
-Write-Log 'Checking GitHub for the latest toolkit files...' 'INFO' $log
+$root = $PSScriptRoot
+if (-not $root) { $root = (Get-Location).Path }
+
+Say 'Checking GitHub for the latest toolkit files...' 'Cyan'
 try {
     $manifest = (Invoke-WebRequest -Uri ($base + 'files.txt') -Headers $headers -UseBasicParsing -ErrorAction Stop).Content
 } catch {
-    Write-Log ('Could not reach the repo: {0}' -f $_.Exception.Message) 'ERROR' $log
-    Write-Host ''
-    Write-Host 'Update failed to reach the repository.' -ForegroundColor Yellow
-    Write-Host 'Check your internet, that the repo is public, or pass -Token for a private repo.' -ForegroundColor Yellow
+    Say ('Could not reach the repo: ' + $_.Exception.Message) 'Red'
+    Say 'Check your internet, that the repo is public, or pass -Token for a private repo.' 'Yellow'
     return
 }
 
 $files = $manifest -split "`r?`n" | ForEach-Object { $_.Trim() } |
     Where-Object { $_ -and $_ -notmatch '^#' }
 
-$root = $PSScriptRoot
 $updated = 0
+$failed = 0
 foreach ($rel in $files) {
     if ($rel -match '^logs/' -or $rel -match '(?i)MY-PC-INVENTORY') { continue }
     $dest = Join-Path $root ($rel -replace '/', '\')
-    $destDir = Split-Path $dest -Parent
-    if (-not (Test-Path -LiteralPath $destDir)) {
-        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-    }
+    $dir = Split-Path $dest -Parent
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     try {
         Invoke-WebRequest -Uri ($base + $rel) -Headers $headers -OutFile $dest -UseBasicParsing -ErrorAction Stop
-        Write-Log ('updated {0}' -f $rel) 'ACTION' $log
+        Say ('  updated ' + $rel) 'Green'
         $updated++
     } catch {
-        Write-Log ('FAILED {0}: {1}' -f $rel, $_.Exception.Message) 'WARN' $log
+        Say ('  FAILED  ' + $rel + ' : ' + $_.Exception.Message) 'Yellow'
+        $failed++
     }
 }
 
-Write-Log ('Done. Updated {0} file(s) into {1}' -f $updated, $root) 'ACTION' $log
-Write-Host ''
-Write-Host ('Toolkit updated in place ({0} files). Re-open the menu to use the latest.' -f $updated) -ForegroundColor Green
+Say ''
+Say ("Done — $updated file(s) updated, $failed failed.") 'Green'
+Say 'Run  .\menu.ps1  to use the latest.' 'Green'
