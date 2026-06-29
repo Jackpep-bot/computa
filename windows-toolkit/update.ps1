@@ -27,35 +27,27 @@ $log = New-ActionLog -Name 'update'
 $headers = @{ 'User-Agent' = 'computa-toolkit-updater' }
 if ($Token) { $headers['Authorization'] = "token $Token" }
 
-function Get-RepoFiles {
-    param([string]$ApiPath)
-    $url = "https://api.github.com/repos/$Repo/contents/$ApiPath" + "?ref=$Branch"
-    $items = Invoke-RestMethod -Uri $url -Headers $headers -UseBasicParsing -ErrorAction Stop
-    $files = @()
-    foreach ($it in $items) {
-        if ($it.type -eq 'dir') { $files += Get-RepoFiles -ApiPath $it.path }
-        elseif ($it.type -eq 'file') { $files += $it }
-    }
-    return $files
-}
+# Pull everything via the raw CDN (no API -> no rate limits). The repo ships a
+# files.txt manifest listing every toolkit file; we read it, then fetch each.
+$base = "https://raw.githubusercontent.com/$Repo/$Branch/windows-toolkit/"
 
 Write-Log 'Checking GitHub for the latest toolkit files...' 'INFO' $log
 try {
-    $files = Get-RepoFiles -ApiPath 'windows-toolkit'
+    $manifest = (Invoke-WebRequest -Uri ($base + 'files.txt') -Headers $headers -UseBasicParsing -ErrorAction Stop).Content
 } catch {
     Write-Log ('Could not reach the repo: {0}' -f $_.Exception.Message) 'ERROR' $log
     Write-Host ''
     Write-Host 'Update failed to reach the repository.' -ForegroundColor Yellow
-    Write-Host 'If the repo is PRIVATE, either:' -ForegroundColor Yellow
-    Write-Host '  - make it public (repo Settings -> Danger Zone -> Change visibility), or' -ForegroundColor Yellow
-    Write-Host '  - run:  .\update.ps1 -Token <your GitHub personal access token>' -ForegroundColor Yellow
+    Write-Host 'Check your internet, that the repo is public, or pass -Token for a private repo.' -ForegroundColor Yellow
     return
 }
 
+$files = $manifest -split "`r?`n" | ForEach-Object { $_.Trim() } |
+    Where-Object { $_ -and $_ -notmatch '^#' }
+
 $root = $PSScriptRoot
 $updated = 0
-foreach ($f in $files) {
-    $rel = $f.path -replace '^windows-toolkit/', ''
+foreach ($rel in $files) {
     if ($rel -match '^logs/' -or $rel -match '(?i)MY-PC-INVENTORY') { continue }
     $dest = Join-Path $root ($rel -replace '/', '\')
     $destDir = Split-Path $dest -Parent
@@ -63,7 +55,7 @@ foreach ($f in $files) {
         New-Item -ItemType Directory -Path $destDir -Force | Out-Null
     }
     try {
-        Invoke-WebRequest -Uri $f.download_url -Headers $headers -OutFile $dest -UseBasicParsing -ErrorAction Stop
+        Invoke-WebRequest -Uri ($base + $rel) -Headers $headers -OutFile $dest -UseBasicParsing -ErrorAction Stop
         Write-Log ('updated {0}' -f $rel) 'ACTION' $log
         $updated++
     } catch {
