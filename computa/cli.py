@@ -97,13 +97,47 @@ def _cmd_diff(args) -> int:
     return 0
 
 
+def _resolve_min_age(args) -> float:
+    """Default min-age: 7 days normally, 1 day for a deep sweep."""
+    if getattr(args, "min_age", None) is not None:
+        return args.min_age
+    return 1.0 if getattr(args, "deep", False) else 7.0
+
+
 def _cmd_clean(args) -> int:
-    result = cleanup.clean(min_age_days=args.min_age, apply=args.yes)
+    min_age = _resolve_min_age(args)
+    deep = getattr(args, "deep", False)
+    result = cleanup.clean(min_age_days=min_age, apply=args.yes, deep=deep)
     if getattr(args, "json", False):
         _print_json(serialize.clean_to_dict(result))
     else:
-        print(report.format_clean(result, args.min_age))
+        print(report.format_clean(result, min_age, deep=deep))
     return 0
+
+
+def _cmd_sweep(args) -> int:
+    """Full sweep: scan + diagnose + deep-clean (preview unless --yes)."""
+    snap = system.collect(processes=True)
+    recs = recommend.analyze(snap)
+    min_age = args.min_age if getattr(args, "min_age", None) is not None else 1.0
+    result = cleanup.clean(min_age_days=min_age, apply=args.yes, deep=True)
+
+    if getattr(args, "json", False):
+        _print_json({
+            "snapshot": serialize.snapshot_to_dict(snap),
+            "recommendations": serialize.recommendations_to_list(recs),
+            "deep_clean": serialize.clean_to_dict(result),
+        })
+        return 2 if any(r.severity == recommend.CRITICAL for r in recs) else 0
+
+    print(report.format_snapshot(snap))
+    print()
+    print(report.format_recommendations(recs))
+    print()
+    print("=" * 60)
+    print(report.format_clean(result, min_age, deep=True))
+    history.save_snapshot(snap)
+    return 2 if any(r.severity == recommend.CRITICAL for r in recs) else 0
 
 
 _MENU = """
@@ -116,6 +150,8 @@ computa — what would you like to do?
   5) Diff      what changed since your last scan
   6) Clean     PREVIEW reclaimable cache/temp (safe — deletes nothing)
   7) Clean now actually delete old cache/temp (asks to confirm)
+  8) Sweep     FULL deep sweep: scan + diagnose + deep-clean preview
+  9) Deep clean delete browser caches, crash dumps, logs, trash (confirms)
   q) Quit
 """
 
@@ -145,7 +181,17 @@ def _cmd_menu(args) -> int:
         elif choice == "7":
             confirm = input("Delete old cache/temp files? Type 'yes' to confirm: ")
             _cmd_clean(argparse.Namespace(
-                json=False, min_age=7.0, yes=confirm.strip().lower() == "yes"))
+                json=False, min_age=None, deep=False,
+                yes=confirm.strip().lower() == "yes"))
+        elif choice == "8":
+            _cmd_sweep(argparse.Namespace(json=False, min_age=None, yes=False))
+        elif choice == "9":
+            print("Deep clean removes browser caches, crash dumps, logs and "
+                  "trash older than 1 day.")
+            confirm = input("Proceed? Type 'yes' to confirm: ")
+            _cmd_clean(argparse.Namespace(
+                json=False, min_age=None, deep=True,
+                yes=confirm.strip().lower() == "yes"))
         else:
             print(f"Unknown choice: {choice!r}")
         try:
@@ -204,11 +250,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     c = sub.add_parser("clean", parents=[common],
                        help="Reclaim cache/temp space (dry-run unless --yes).")
-    c.add_argument("--min-age", type=float, default=7.0,
-                   help="Only remove files older than N days (default: 7).")
+    c.add_argument("--min-age", type=float, default=None,
+                   help="Only remove files older than N days "
+                        "(default: 7, or 1 with --deep).")
+    c.add_argument("--deep", action="store_true",
+                   help="Fuller sweep: browser caches, crash dumps, logs, trash.")
     c.add_argument("--yes", action="store_true",
                    help="Actually delete (default is a safe preview).")
     c.set_defaults(func=_cmd_clean)
+
+    sw = sub.add_parser("sweep", parents=[common],
+                        help="Full sweep: scan + diagnose + deep-clean preview.")
+    sw.add_argument("--min-age", type=float, default=None,
+                    help="Only remove files older than N days (default: 1).")
+    sw.add_argument("--yes", action="store_true",
+                    help="Actually delete the deep-clean items (default preview).")
+    sw.set_defaults(func=_cmd_sweep, deep=True)
 
     m = sub.add_parser("menu",
                        help="Interactive menu (no commands to remember).")

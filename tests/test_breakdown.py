@@ -41,7 +41,7 @@ def test_clean_populates_breakdown(tmp_path, monkeypatch):
     old = time.time() - 30 * 86400
     os.utime(str(f), (old, old))
 
-    monkeypatch.setattr(cleanup, "_temp_candidates", lambda: [str(tmp_path)])
+    monkeypatch.setattr(cleanup, "_temp_candidates", lambda deep=False: [str(tmp_path)])
     result = cleanup.clean(min_age_days=7, apply=False)
     assert result.breakdown
     assert result.breakdown[0].name == "google-chrome"

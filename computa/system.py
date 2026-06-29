@@ -17,6 +17,7 @@ from typing import List, Optional
 from . import util
 from .startup import StartupItem, collect_startup
 from .util import HAVE_PSUTIL, psutil
+from .walk import iter_files
 
 
 @dataclass
@@ -145,25 +146,22 @@ def _dir_size(path: str, max_entries: int = 200000):
     """Return (total_bytes, file_count) for a directory tree, robust to errors."""
     total = 0
     count = 0
-    try:
-        for root, _dirs, files in os.walk(path, onerror=lambda e: None):
-            for name in files:
-                fp = os.path.join(root, name)
-                try:
-                    st = os.lstat(fp)
-                    total += st.st_size
-                    count += 1
-                except (OSError, PermissionError):
-                    continue
-                if count >= max_entries:
-                    return total, count
-    except (OSError, PermissionError):
-        pass
+    for entry in iter_files(path, max_entries):
+        try:
+            total += entry.stat(follow_symlinks=False).st_size
+        except (OSError, PermissionError):
+            continue
+        count += 1
     return total, count
 
 
-def _temp_candidates() -> List[str]:
-    """OS-appropriate temp / cache directories that are safe to *measure*."""
+def _temp_candidates(deep: bool = False) -> List[str]:
+    """OS-appropriate temp / cache directories that are safe to clean.
+
+    With ``deep=True`` the set is widened to extra well-known junk locations
+    (browser caches, crash dumps, logs, trash/recycle bin) for a fuller sweep.
+    Everything here is regenerable junk — never user documents.
+    """
     paths: List[str] = []
     home = os.path.expanduser("~")
     sysname = platform.system()
@@ -176,15 +174,33 @@ def _temp_candidates() -> List[str]:
 
     if sysname == "Windows":
         local = os.environ.get("LOCALAPPDATA")
+        win = os.environ.get("SystemRoot", r"C:\Windows")
         if local:
             paths.append(os.path.join(local, "Temp"))
-        win = os.environ.get("SystemRoot", r"C:\Windows")
         paths.append(os.path.join(win, "Temp"))
+        if deep:
+            if local:
+                paths.append(os.path.join(local, "CrashDumps"))
+                paths.append(os.path.join(
+                    local, r"Google\Chrome\User Data\Default\Cache"))
+                paths.append(os.path.join(
+                    local, r"Microsoft\Edge\User Data\Default\Cache"))
+                paths.append(os.path.join(local, r"Microsoft\Windows\INetCache"))
+            drive = os.environ.get("SystemDrive", "C:") + os.sep
+            paths.append(os.path.join(drive, "$Recycle.Bin"))
     elif sysname == "Darwin":
         paths.append(os.path.join(home, "Library", "Caches"))
+        if deep:
+            paths.append(os.path.join(home, "Library", "Logs"))
+            paths.append(os.path.join(home, ".Trash"))
     else:  # Linux / other unix
         xdg = os.environ.get("XDG_CACHE_HOME") or os.path.join(home, ".cache")
         paths.append(xdg)
+        if deep:
+            data = os.environ.get("XDG_DATA_HOME") or os.path.join(
+                home, ".local", "share")
+            paths.append(os.path.join(data, "Trash", "files"))
+            paths.append(os.path.join(data, "Trash", "info"))
 
     # de-dup, keep only existing dirs
     seen = set()

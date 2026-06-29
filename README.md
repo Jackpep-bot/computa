@@ -48,7 +48,8 @@ computa scan
 | `computa top`      | "What's eating my resources right now" — top CPU & memory processes (needs psutil). |
 | `computa startup`  | List **or toggle** programs that launch at login/boot (`--enable`/`--disable NAME`). |
 | `computa diff`     | Show what changed since your last scan (disk, memory, cache/temp, startup items). |
-| `computa clean`    | Reclaim cache/temp space, with a **per-app breakdown** (e.g. "Chrome: 1.2 GB"). **Dry-run by default** — shows what *would* be removed. |
+| `computa clean`    | Reclaim cache/temp space, with a **per-app breakdown** (e.g. "Chrome: 1.2 GB"). `--deep` widens the sweep. **Dry-run by default.** |
+| `computa sweep`    | **Full sweep** — scan + diagnose + deep-clean preview in one pass. The "scrub everything" command. |
 | `computa menu`     | Interactive menu — no commands to remember (what the launchers open). |
 
 Every reporting command also accepts **`--json`** for machine-readable output
@@ -68,6 +69,10 @@ computa diff              # what changed since your last scan
 computa clean             # PREVIEW reclaimable junk (deletes nothing)
 computa clean --yes       # actually delete old cache/temp files
 computa clean --min-age 30 --yes   # only files older than 30 days
+computa clean --deep      # PREVIEW a deeper sweep (browser caches, dumps, logs, trash)
+computa clean --deep --yes         # perform the deep clean
+computa sweep             # full scan + diagnose + deep-clean preview, one shot
+computa sweep --yes       # ...and actually run the deep clean
 computa menu              # guided menu, no flags to remember
 ```
 
@@ -87,6 +92,25 @@ computa menu              # guided menu, no flags to remember
 
 It never deletes outside those directories and never reads file *contents*.
 
+### Deep clean (`--deep` / `sweep`)
+
+`--deep` widens the sweep to more regenerable junk and lowers the default age
+floor to **1 day** (still never 0, so live temp files are left alone):
+
+- **Windows:** browser caches (Chrome, Edge), `INetCache`, `CrashDumps`, and the
+  Recycle Bin (`$Recycle.Bin`).
+- **macOS:** `~/Library/Logs` and `~/.Trash`.
+- **Linux:** the XDG trash (`~/.local/share/Trash`).
+
+These are all caches, logs, dumps and already-deleted (trashed) files — emptying
+them is exactly what a "deep clean" should do. It is still **preview-by-default**
+and still skips anything locked or in use. Note that deep clean **does** empty
+your Trash/Recycle Bin when you pass `--yes`, so glance at the preview first.
+
+> What computa intentionally does **not** do: touch the Windows registry, delete
+> program files, or remove anything outside these known junk locations. "Registry
+> cleaning" is risky snake-oil and is deliberately absent.
+
 ---
 
 ## How it works
@@ -96,8 +120,9 @@ computa/
   system.py      gather a Snapshot (platform, CPU, memory, disks, processes, temp, startup)
   startup.py     cross-platform login/boot program inspection + enable/disable
   history.py     save scan baselines and compute "what changed since last scan"
+  walk.py        fast scandir-based directory traversal (sizing + cleanup)
   recommend.py   pure logic: Snapshot -> prioritized recommendations
-  cleanup.py     safe discovery + removal of old cache/temp files
+  cleanup.py     safe discovery + removal of old cache/temp files (+ deep mode)
   serialize.py   convert data objects into JSON-ready dicts (--json output)
   report.py      terminal-friendly formatting (with color on TTYs)
   cli.py         argparse command-line interface + interactive menu

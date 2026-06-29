@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import List
 
 from .system import _temp_candidates
+from .walk import iter_files
 
 
 @dataclass
@@ -43,31 +44,30 @@ class CleanResult:
 
 
 def find_candidates(min_age_days: float = 7.0,
-                    max_entries: int = 200000) -> List[CleanCandidate]:
-    """Find old files in known cache/temp dirs that are safe to remove."""
+                    max_entries: int = 200000,
+                    deep: bool = False) -> List[CleanCandidate]:
+    """Find old files in known cache/temp dirs that are safe to remove.
+
+    ``deep=True`` widens the search to extra junk locations (browser caches,
+    crash dumps, logs, trash). ``iter_files`` already skips symlinks and
+    unreadable entries.
+    """
     now = time.time()
     cutoff = now - min_age_days * 86400
     out: List[CleanCandidate] = []
-    seen = 0
-    for base in _temp_candidates():
-        for root, _dirs, files in os.walk(base, onerror=lambda e: None):
-            for name in files:
-                fp = os.path.join(root, name)
-                try:
-                    st = os.lstat(fp)
-                except (OSError, PermissionError):
-                    continue
-                # skip symlinks; only count regular files
-                if not os.path.isfile(fp) or os.path.islink(fp):
-                    continue
-                mtime = st.st_mtime
-                if mtime > cutoff:
-                    continue
-                age_days = (now - mtime) / 86400.0
-                out.append(CleanCandidate(path=fp, size=st.st_size, age_days=age_days))
-                seen += 1
-                if seen >= max_entries:
-                    return out
+    for base in _temp_candidates(deep=deep):
+        for entry in iter_files(base, max_entries - len(out)):
+            try:
+                st = entry.stat(follow_symlinks=False)
+            except (OSError, PermissionError):
+                continue
+            if st.st_mtime > cutoff:
+                continue
+            out.append(CleanCandidate(
+                path=entry.path, size=st.st_size,
+                age_days=(now - st.st_mtime) / 86400.0))
+            if len(out) >= max_entries:
+                return out
     return out
 
 
@@ -104,11 +104,16 @@ def breakdown_by_app(candidates: List[CleanCandidate],
     return usage
 
 
-def clean(min_age_days: float = 7.0, apply: bool = False) -> CleanResult:
-    """Preview (default) or apply cleanup of old cache/temp files."""
-    candidates = find_candidates(min_age_days=min_age_days)
+def clean(min_age_days: float = 7.0, apply: bool = False,
+          deep: bool = False) -> CleanResult:
+    """Preview (default) or apply cleanup of old cache/temp files.
+
+    ``deep=True`` performs a fuller sweep across browser caches, crash dumps,
+    logs and trash in addition to the standard temp/cache locations.
+    """
+    candidates = find_candidates(min_age_days=min_age_days, deep=deep)
     reclaimable = sum(c.size for c in candidates)
-    breakdown = breakdown_by_app(candidates)
+    breakdown = breakdown_by_app(candidates, bases=_temp_candidates(deep=deep))
     removed = 0
     removed_files = 0
     errors = 0

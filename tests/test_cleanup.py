@@ -19,8 +19,8 @@ def test_find_candidates_respects_age(tmp_path, monkeypatch):
     _make_file(str(old), 1000, age_days=30)
     _make_file(str(new), 1000, age_days=1)
 
-    monkeypatch.setattr(system, "_temp_candidates", lambda: [str(tmp_path)])
-    monkeypatch.setattr(cleanup, "_temp_candidates", lambda: [str(tmp_path)])
+    monkeypatch.setattr(system, "_temp_candidates", lambda deep=False: [str(tmp_path)])
+    monkeypatch.setattr(cleanup, "_temp_candidates", lambda deep=False: [str(tmp_path)])
 
     cands = cleanup.find_candidates(min_age_days=7)
     paths = {c.path for c in cands}
@@ -31,7 +31,7 @@ def test_find_candidates_respects_age(tmp_path, monkeypatch):
 def test_dry_run_deletes_nothing(tmp_path, monkeypatch):
     f = tmp_path / "junk.tmp"
     _make_file(str(f), 2048, age_days=30)
-    monkeypatch.setattr(cleanup, "_temp_candidates", lambda: [str(tmp_path)])
+    monkeypatch.setattr(cleanup, "_temp_candidates", lambda deep=False: [str(tmp_path)])
 
     result = cleanup.clean(min_age_days=7, apply=False)
     assert result.applied is False
@@ -43,7 +43,7 @@ def test_dry_run_deletes_nothing(tmp_path, monkeypatch):
 def test_apply_removes_old_files(tmp_path, monkeypatch):
     f = tmp_path / "junk.tmp"
     _make_file(str(f), 4096, age_days=30)
-    monkeypatch.setattr(cleanup, "_temp_candidates", lambda: [str(tmp_path)])
+    monkeypatch.setattr(cleanup, "_temp_candidates", lambda deep=False: [str(tmp_path)])
 
     result = cleanup.clean(min_age_days=7, apply=True)
     assert result.applied is True

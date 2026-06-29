@@ -128,17 +128,18 @@ def format_recommendations(recs: List[Recommendation]) -> str:
     return "\n".join(lines).rstrip()
 
 
-def format_clean(result, min_age_days: float) -> str:
+def format_clean(result, min_age_days: float, deep: bool = False) -> str:
     n = len(result.candidates)
+    kind = "Deep clean" if deep else "Cleanup"
     lines = []
     if result.applied:
-        lines.append(_head("Cleanup complete"))
+        lines.append(_head(f"{kind} complete"))
         lines.append(f"  Removed {result.removed_files} files, "
                      f"reclaimed {human_bytes(result.removed)}.")
         if result.errors:
             lines.append(f"  Skipped {result.errors} file(s) (in use or no permission).")
     else:
-        lines.append(_head("Cleanup preview (dry-run — nothing deleted)"))
+        lines.append(_head(f"{kind} preview (dry-run — nothing deleted)"))
         lines.append(f"  {n} file(s) older than {min_age_days:g} days could be removed,")
         lines.append(f"  reclaiming about {human_bytes(result.reclaimable)}.")
         # per-app breakdown ("Chrome cache: 1.2 GB, ...")
