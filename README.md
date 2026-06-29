@@ -14,14 +14,20 @@ CPU/memory, swap, uptime and per-process detail.
 
 ## Quick start
 
-**No terminal? Use the one-click launcher.** It sets everything up on first run,
-then opens a simple menu:
+**No terminal? Use the one-click launcher.** It needs **no install** — computa
+runs on Python's standard library alone — so just double-click and a simple menu
+opens. (It tries to add the optional `psutil` helper for deeper scans, but skips
+it silently if that can't install, so it always runs.)
 
 | Your OS | Double-click / run |
 | ------- | ------------------ |
 | macOS   | `Computa.command`  |
 | Windows | `Computa.bat`      |
 | Linux   | `./computa.sh`     |
+
+> The only requirement is Python 3.8+ . On Windows, if the launcher says Python
+> wasn't found, install it from [python.org](https://www.python.org/downloads/)
+> and tick **"Add python.exe to PATH"**, then double-click the launcher again.
 
 **Prefer the terminal?**
 
