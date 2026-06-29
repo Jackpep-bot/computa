@@ -23,6 +23,12 @@ ever happens.
 
 ## How to run
 
+**Easiest:** double-click **`Run-Toolkit.bat`** — it launches the menu with an
+execution-policy bypass for that one run, so you don't change any settings.
+(For the admin-only steps, right-click it and choose *Run as administrator*.)
+
+**Or from PowerShell:**
+
 1. Copy the `windows-toolkit` folder onto the PC.
 2. Open **PowerShell** (some steps need **Run as administrator** — they'll say so).
 3. If scripts are blocked, allow them for this session only:
@@ -33,6 +39,8 @@ ever happens.
    ```powershell
    .\menu.ps1
    ```
+
+**Or** right-click `menu.ps1` in Explorer and choose **Run with PowerShell**.
 
 The menu runs things in a sensible order (protect → diagnose → audits →
 adjustments → cleanup last). Destructive items **preview first**, then ask you
