@@ -250,10 +250,28 @@ if ($clickJob) {
 if ($NukeSteamLibraries) {
     Write-Host ''
     Write-Host 'Steam game files:' -ForegroundColor White
-    $libs = @(
-        (Join-Path ${env:ProgramFiles(x86)} 'Steam\steamapps'),
-        'D:\SteamLibrary\steamapps'
-    )
+
+    # Auto-detect Steam library locations across every fixed drive (not just C:).
+    $libs = New-Object System.Collections.Generic.List[string]
+    $driveRoots = @()
+    try {
+        $driveRoots = Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction Stop |
+            ForEach-Object { $_.DeviceID + '\' }
+    } catch {
+        $driveRoots = @('C:\', 'D:\')
+    }
+    foreach ($root in $driveRoots) {
+        foreach ($cand in @(
+                (Join-Path $root 'Program Files (x86)\Steam\steamapps'),
+                (Join-Path $root 'Steam\steamapps'),
+                (Join-Path $root 'SteamLibrary\steamapps'),
+                (Join-Path $root 'Games\Steam\steamapps'),
+                (Join-Path $root 'SteamGames\steamapps'))) {
+            if ((Test-Path -LiteralPath $cand) -and ($libs -notcontains $cand)) { $libs.Add($cand) }
+        }
+    }
+    if ($libs.Count -eq 0) { Write-Log 'No Steam library folders found.' 'INFO' $log }
+
     foreach ($lib in $libs) {
         foreach ($sub in 'common', 'downloading') {
             $path = Join-Path $lib $sub
