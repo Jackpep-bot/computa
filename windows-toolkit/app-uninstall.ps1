@@ -34,29 +34,53 @@ param(
 $log = New-ActionLog -Name 'app-uninstall'
 
 # --- Hard protected list: NEVER uninstalled, whatever options are passed. ---
+# Grouped for clarity; matched case-insensitively as regex against the app name.
 $Protected = @(
-    'VALORANT', 'Riot Vanguard', 'Riot Games',
+    # Your explicit keepers + anti-cheat that Valorant needs
+    'VALORANT', 'Riot Vanguard', 'Vanguard', 'Riot Games',
     'Claude',
     'Google Chrome',
-    'NVIDIA', 'Realtek', 'Intel', 'Advanced Micro Devices', 'Synaptics', 'Conexant',
-    'Microsoft Visual C\+\+', 'Visual C\+\+',
+    # Hardware vendors / drivers
+    'NVIDIA', 'Realtek', 'Intel', 'Advanced Micro Devices', 'AMD ',
+    'Synaptics', 'Conexant', 'Qualcomm', 'Killer', 'MediaTek', 'Broadcom',
+    # Driver/firmware by name (covers drivers whatever the publisher)
+    'HD Audio', 'High Definition Audio', 'Audio Driver', 'Chipset',
+    'Wi-?Fi', 'Wireless', 'Bluetooth', 'Ethernet', 'LAN Driver',
+    'Network Adapter', 'Graphics Driver', 'Display Driver', 'Serial IO',
+    'Management Engine', 'Platform Device', 'Card Reader',
+    'Windows Driver Package', 'Driver Package', 'PhysX',
+    # Core runtimes / frameworks
+    'Microsoft Visual C\+\+', 'Visual C\+\+', '\.NET', 'ASP\.NET', 'MSXML',
+    'DirectX', 'GameInput', 'Microsoft GameInput', 'C\+\+ Redistributable',
+    # Browser engine / Windows components
     'Microsoft Edge', 'WebView2', 'EdgeUpdate',
-    '\.NET', 'DirectX', 'GameInput', 'Microsoft GameInput',
     'Microsoft Update Health', 'Update for', 'Security Update', 'KB\d',
-    'Windows Software Development', 'Microsoft Windows',
-    'WinRAR',
-    'OneDrive'
+    'Windows Software Development', 'Microsoft Windows', 'Windows App',
+    # Security software — never strip a PC's protection automatically
+    'Windows Defender', 'Microsoft Defender', 'Windows Security',
+    'Malwarebytes', 'Avast', 'AVG', 'Bitdefender', 'Norton', 'McAfee',
+    'Kaspersky', 'ESET', 'Webroot',
+    # Useful keepers
+    'WinRAR', '7-Zip', 'OneDrive'
 )
+
+# Driver/runtime keywords used as a publisher-based safety net.
+$DriverKeywords =
+    'driver|redistributable|runtime|\.net|directx|edge|webview|visual c|' +
+    'gameinput|health|chipset|audio|wireless|bluetooth|ethernet|lan|wi-?fi|' +
+    'graphics|firmware|update|management engine'
 
 function Test-Protected {
     param([string]$Name, [string]$Publisher)
     foreach ($p in $Protected) {
         if ($Name -match $p) { return $true }
     }
-    # Belt-and-braces: never touch drivers/runtimes from hardware/OS vendors.
-    if ($Publisher -match '(?i)nvidia|realtek|intel|advanced micro devices') { return $true }
-    if ($Publisher -match '(?i)microsoft' -and
-        $Name -match '(?i)driver|redistributable|runtime|update|\.net|directx|edge|webview|visual c|gameinput|health') {
+    # Belt-and-braces: never touch anything from hardware vendors, and never
+    # touch drivers/runtimes/security from Microsoft.
+    if ($Publisher -match '(?i)nvidia|realtek|intel|advanced micro devices|qualcomm|synaptics|broadcom|mediatek') {
+        return $true
+    }
+    if ($Publisher -match '(?i)microsoft' -and $Name -match ('(?i)' + $DriverKeywords)) {
         return $true
     }
     return $false

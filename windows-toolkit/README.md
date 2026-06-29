@@ -62,6 +62,10 @@ you to back up first**.
 - **health-report.ps1** — a compact combined summary (disk health, space, top
   errors, startup count, drive types) in one dated file you can copy back for
   advice.
+- **upgrade-advisor.ps1** — inspects RAM (and free slots), storage type/space,
+  CPU and GPU, then recommends the **best hardware upgrade** for your PC,
+  highlights the single highest-impact one, and explains how to do it (with
+  rough cost). Read-only.
 - **disk-map.ps1** `[-Path C:\] [-MinFileMB 10]` — the 30 largest files and 20
   largest folders, biggest first. Table + two CSVs. *(Heavy scan.)*
 - **profile-bloat.ps1** `[-Path %USERPROFILE%] [-Depth 2]` — largest folders
