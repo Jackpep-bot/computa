@@ -117,7 +117,7 @@ you to back up first**.
 - **cleanup.ps1** `[-Confirm]` — clears `%TEMP%`, Windows Temp, browser caches,
   Recycle Bin, and the Windows Update download cache. **DRY-RUN by default**
   (shows what would be freed); `-Confirm` actually deletes. Logs everything.
-- **app-uninstall.ps1** `[-Confirm] [-Only <patterns>] [-Keep <patterns>] [-NukeSteamLibraries]`
+- **app-uninstall.ps1** `[-Confirm] [-Only <patterns>] [-Keep <patterns>] [-NukeSteamLibraries] [-AutoConfirm] [-AutoClick]`
   — automated bulk uninstaller. **DRY-RUN by default** (lists exactly what would
   be removed); `-Confirm` actually uninstalls. A **hard protected list** means it
   can never remove Windows, NVIDIA/Realtek/Intel/AMD drivers, Visual C++/.NET/
@@ -125,7 +125,11 @@ you to back up first**.
   MSI apps uninstall silently; some apps may briefly show their own uninstaller.
   `-NukeSteamLibraries` also deletes Steam game files to reclaim that space.
   Use `-Only 'Discord','Spotify'` to target specific apps, or `-Keep 'Discord'`
-  to protect extras.
+  to protect extras. **Walk-away mode:** `-AutoConfirm` runs each uninstaller
+  silently (detects MSI / Inno Setup / NSIS and uses their silent switches) so
+  nothing prompts you — the menu's option 17 uses this. For the rare uninstaller
+  that still shows a window, add `-AutoClick`: a background watcher presses Enter
+  on uninstaller-looking windows so they finish unattended (best-effort).
 
 ### Shared
 - **lib/Common.ps1** — shared helpers (logging, size formatting, SMART health,
