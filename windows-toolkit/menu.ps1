@@ -65,6 +65,7 @@ function Show-Menu {
     Write-Host '   2) Diagnose - full health report'
     Write-Host '   3) Health summary (copy back for advice)'
     Write-Host '   a) Upgrade advisor - best hardware upgrade for your PC + how-to'
+    Write-Host '   u) Update toolkit - pull the latest scripts into THIS folder'
     Write-Host '   4) Disk map - biggest files/folders        [heavy scan]'
     Write-Host '   5) Profile bloat - biggest profile folders'
     Write-Host '   6) Find clutter - big/stale/duplicate files [heavy scan]'
@@ -82,6 +83,8 @@ function Show-Menu {
     Write-Host '  16) Cleanup junk - preview, then APPLY to delete'
     Write-Host '  17) Uninstall apps - remove ALL non-essential programs +'
     Write-Host '                       Steam games (keeps Valorant/Claude/Chrome/drivers)'
+    Write-Host '   d) Desktop sweep - clear Desktop clutter + old project copies'
+    Write-Host '                       (keeps the toolkit in use + your inventory; failsafe stops on danger)'
     Write-Host '   q) Quit'
     Write-Host ''
 }
@@ -94,6 +97,7 @@ while ($true) {
         '2'  { Invoke-Script 'diagnose.ps1' }
         '3'  { Invoke-Script 'health-report.ps1' }
         'a'  { Invoke-Script 'upgrade-advisor.ps1' }
+        'u'  { Invoke-Script 'update.ps1' }
         '4'  { if (Confirm-HeavyScan) { $p = Read-Host 'Folder to scan (Enter for C:\)'; if ([string]::IsNullOrWhiteSpace($p)) { $p = 'C:\' }; Invoke-Script 'disk-map.ps1' @{ Path = $p } } }
         '5'  { Invoke-Script 'profile-bloat.ps1' }
         '6'  { if (Confirm-HeavyScan) { $p = Read-Host 'Folder to scan (Enter for your profile)'; if ([string]::IsNullOrWhiteSpace($p)) { $p = $env:USERPROFILE }; Invoke-Script 'find-clutter.ps1' @{ Path = $p } } }
@@ -108,6 +112,7 @@ while ($true) {
         '15' { Invoke-Destructive 'system-repair.ps1' @{} }
         '16' { Invoke-Destructive 'cleanup.ps1' @{} '  This will permanently delete junk files when applied.' }
         '17' { Invoke-Destructive 'app-uninstall.ps1' @{ NukeSteamLibraries = $true } '  This UNINSTALLS all non-essential programs and DELETES Steam game files. Keeps Valorant, Claude, Chrome, Windows and drivers.' }
+        'd'  { Invoke-Destructive 'safe-sweep.ps1' @{ All = $true } '  This clears your Desktop. The toolkit folder in use and MY-PC-INVENTORY are protected; a failsafe stops everything if anything protected is touched.' }
         'q'  { Write-Host 'Bye.'; return }
         ''   { }
         default { Write-Host ('Unknown option: {0}' -f $choice) -ForegroundColor Yellow }
