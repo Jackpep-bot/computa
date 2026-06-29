@@ -5,8 +5,8 @@ import argparse
 import json
 import sys
 
-from . import (__version__, cleanup, recommend, report, serialize, startup,
-               system)
+from . import (__version__, cleanup, history, recommend, report, serialize,
+               startup, system)
 
 
 def _print_json(obj) -> None:
@@ -16,6 +16,8 @@ def _print_json(obj) -> None:
 def _cmd_scan(args) -> int:
     snap = system.collect(processes=not getattr(args, "fast", False))
     recs = recommend.analyze(snap)
+    if getattr(args, "save", True):
+        history.save_snapshot(snap)
     if getattr(args, "json", False):
         _print_json({
             "snapshot": serialize.snapshot_to_dict(snap),
@@ -53,11 +55,45 @@ def _cmd_top(args) -> int:
 
 
 def _cmd_startup(args) -> int:
+    from dataclasses import asdict
+
+    target = getattr(args, "enable", None) or getattr(args, "disable", None)
+    if target is not None:
+        want_enable = getattr(args, "enable", None) is not None
+        result = startup.set_enabled(target, want_enable)
+        if getattr(args, "json", False):
+            _print_json(asdict(result))
+        else:
+            print(result.message)
+        return 0 if result.ok else 1
+
     items = startup.collect_startup()
     if getattr(args, "json", False):
         _print_json(serialize.startup_to_list(items))
     else:
         print(report.format_startup(items))
+    return 0
+
+
+def _cmd_diff(args) -> int:
+    snap = system.collect(processes=False)
+    previous = history.load_last()
+    if previous is None:
+        history.save_snapshot(snap)
+        msg = ("No previous scan found — saved a baseline just now. "
+               "Run `computa diff` again later to see what changed.")
+        if getattr(args, "json", False):
+            _print_json({"baseline_created": True, "message": msg})
+        else:
+            print(msg)
+        return 0
+    diff = history.compute_diff(previous, snap)
+    if getattr(args, "json", False):
+        _print_json(serialize.diff_to_dict(diff))
+    else:
+        print(history.format_diff(diff))
+    if getattr(args, "save", True):
+        history.save_snapshot(snap)
     return 0
 
 
@@ -77,8 +113,9 @@ computa — what would you like to do?
   2) Doctor    just the recommendations
   3) Top       what's using CPU / memory right now
   4) Startup   programs that launch at login
-  5) Clean     PREVIEW reclaimable cache/temp (safe — deletes nothing)
-  6) Clean now actually delete old cache/temp (asks to confirm)
+  5) Diff      what changed since your last scan
+  6) Clean     PREVIEW reclaimable cache/temp (safe — deletes nothing)
+  7) Clean now actually delete old cache/temp (asks to confirm)
   q) Quit
 """
 
@@ -100,10 +137,12 @@ def _cmd_menu(args) -> int:
         elif choice == "3":
             _cmd_top(argparse.Namespace(json=False))
         elif choice == "4":
-            _cmd_startup(argparse.Namespace(json=False))
+            _cmd_startup(argparse.Namespace(json=False, enable=None, disable=None))
         elif choice == "5":
-            _cmd_clean(argparse.Namespace(json=False, min_age=7.0, yes=False))
+            _cmd_diff(argparse.Namespace(json=False, save=True))
         elif choice == "6":
+            _cmd_clean(argparse.Namespace(json=False, min_age=7.0, yes=False))
+        elif choice == "7":
             confirm = input("Delete old cache/temp files? Type 'yes' to confirm: ")
             _cmd_clean(argparse.Namespace(
                 json=False, min_age=7.0, yes=confirm.strip().lower() == "yes"))
@@ -136,7 +175,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Skip per-process scan (quicker, no ~0.5s sample).")
     s.add_argument("--no-advice", dest="advice", action="store_false",
                    help="Don't append recommendations after the snapshot.")
-    s.set_defaults(func=_cmd_scan, advice=True)
+    s.add_argument("--no-save", dest="save", action="store_false",
+                   help="Don't save this scan as the baseline for `computa diff`.")
+    s.set_defaults(func=_cmd_scan, advice=True, save=True)
 
     d = sub.add_parser("doctor", parents=[common],
                        help="Diagnose issues and print prioritized advice.")
@@ -147,8 +188,19 @@ def build_parser() -> argparse.ArgumentParser:
     t.set_defaults(func=_cmd_top)
 
     u = sub.add_parser("startup", parents=[common],
-                       help="List programs that launch at login/boot.")
+                       help="List or toggle programs that launch at login/boot.")
+    grp = u.add_mutually_exclusive_group()
+    grp.add_argument("--enable", metavar="NAME",
+                     help="Enable the named startup program.")
+    grp.add_argument("--disable", metavar="NAME",
+                     help="Disable the named startup program (reversible).")
     u.set_defaults(func=_cmd_startup)
+
+    df = sub.add_parser("diff", parents=[common],
+                        help="Show what changed since your last scan.")
+    df.add_argument("--no-save", dest="save", action="store_false",
+                    help="Compare but don't update the saved baseline.")
+    df.set_defaults(func=_cmd_diff, save=True)
 
     c = sub.add_parser("clean", parents=[common],
                        help="Reclaim cache/temp space (dry-run unless --yes).")

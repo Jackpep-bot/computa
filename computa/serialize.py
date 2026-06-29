@@ -32,3 +32,12 @@ def clean_to_dict(result: CleanResult) -> dict:
 
 def startup_to_list(items: List[StartupItem]) -> List[dict]:
     return [asdict(i) for i in items]
+
+
+def diff_to_dict(diff) -> dict:
+    """Serialize a history.Diff, including its computed delta properties."""
+    d = asdict(diff)
+    for orig, out in zip(diff.disks, d.get("disks", [])):
+        out["free_delta"] = orig.free_delta
+    d["temp_delta"] = diff.temp_delta
+    return d
