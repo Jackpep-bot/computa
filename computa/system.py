@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from . import util
+from .startup import StartupItem, collect_startup
 from .util import HAVE_PSUTIL, psutil
 
 
@@ -67,6 +68,7 @@ class Snapshot:
     top_cpu: List[ProcInfo] = field(default_factory=list)
     top_mem: List[ProcInfo] = field(default_factory=list)
     temp_dirs: List[TempInfo] = field(default_factory=list)
+    startup: List[StartupItem] = field(default_factory=list)
 
 
 def _disk_partitions() -> List[str]:
@@ -233,4 +235,5 @@ def collect(processes: bool = True) -> Snapshot:
     if processes:
         snap.top_cpu, snap.top_mem = _collect_processes()
     snap.temp_dirs = _collect_temp()
+    snap.startup = collect_startup()
     return snap

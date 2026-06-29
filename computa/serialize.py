@@ -1,0 +1,34 @@
+"""Convert computa data objects into JSON-ready dicts.
+
+Kept separate from the dataclasses so the ``percent`` properties (which
+``dataclasses.asdict`` would omit) are included in machine-readable output.
+"""
+from __future__ import annotations
+
+from dataclasses import asdict
+from typing import List
+
+from .cleanup import CleanResult
+from .recommend import Recommendation
+from .startup import StartupItem
+from .system import Snapshot
+
+
+def snapshot_to_dict(snap: Snapshot) -> dict:
+    d = asdict(snap)
+    # asdict drops @property values; re-attach disk usage percent.
+    for orig, out in zip(snap.disks, d.get("disks", [])):
+        out["percent"] = round(orig.percent, 1)
+    return d
+
+
+def recommendations_to_list(recs: List[Recommendation]) -> List[dict]:
+    return [asdict(r) for r in recs]
+
+
+def clean_to_dict(result: CleanResult) -> dict:
+    return asdict(result)
+
+
+def startup_to_list(items: List[StartupItem]) -> List[dict]:
+    return [asdict(i) for i in items]

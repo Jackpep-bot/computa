@@ -86,6 +86,31 @@ def format_snapshot(snap: Snapshot) -> str:
         for t in snap.temp_dirs:
             lines.append(f"  {human_bytes(t.size):>9}  ({t.files} files)  {t.path}")
 
+    if snap.startup:
+        enabled = sum(1 for s in snap.startup if s.enabled)
+        lines.append("")
+        lines.append(_head("Startup"))
+        lines.append(f"  {enabled} program(s) launch at login "
+                     f"(of {len(snap.startup)} configured).")
+        lines.append("  " + _c("See them with `computa startup`.", "dim"))
+
+    return "\n".join(lines)
+
+
+def format_startup(items) -> str:
+    if not items:
+        return ("No startup programs found (or startup inspection isn't supported "
+                "on this OS).")
+    enabled = sum(1 for i in items if i.enabled)
+    lines = [_head(f"Startup programs ({enabled} enabled / {len(items)} total):"), ""]
+    for it in items:
+        status = "" if it.enabled else _c(" (disabled)", "dim")
+        lines.append(f"  • {it.name}{status}")
+        target = it.command or it.location
+        lines.append(f"      {_c(it.source, 'dim')}: {target}")
+    lines.append("")
+    lines.append(_c("  Tip: disabling programs you don't need at login speeds up "
+                    "boot and frees background memory.", "dim"))
     return "\n".join(lines)
 
 

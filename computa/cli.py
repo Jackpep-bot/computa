@@ -2,46 +2,126 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
-from . import __version__, cleanup, recommend, report, system
+from . import (__version__, cleanup, recommend, report, serialize, startup,
+               system)
+
+
+def _print_json(obj) -> None:
+    print(json.dumps(obj, indent=2, default=str))
 
 
 def _cmd_scan(args) -> int:
-    snap = system.collect(processes=not args.fast)
+    snap = system.collect(processes=not getattr(args, "fast", False))
+    recs = recommend.analyze(snap)
+    if getattr(args, "json", False):
+        _print_json({
+            "snapshot": serialize.snapshot_to_dict(snap),
+            "recommendations": serialize.recommendations_to_list(recs),
+        })
+        return 0
     print(report.format_snapshot(snap))
-    if args.advice:
+    if getattr(args, "advice", True):
         print()
-        print(report.format_recommendations(recommend.analyze(snap)))
+        print(report.format_recommendations(recs))
     return 0
 
 
 def _cmd_doctor(args) -> int:
     snap = system.collect(processes=True)
     recs = recommend.analyze(snap)
-    print(report.format_recommendations(recs))
-    # exit non-zero if anything critical, so it is scriptable
+    if getattr(args, "json", False):
+        _print_json(serialize.recommendations_to_list(recs))
+    else:
+        print(report.format_recommendations(recs))
     return 2 if any(r.severity == recommend.CRITICAL for r in recs) else 0
 
 
 def _cmd_top(args) -> int:
     snap = system.collect(processes=True)
+    if getattr(args, "json", False):
+        _print_json(serialize.snapshot_to_dict(snap))
+        return 0
     if not snap.have_psutil:
         print("`computa top` needs psutil for process detail. Install it with:\n"
               "  pip install psutil")
         return 1
-    # Reuse the snapshot formatter but only the process-relevant parts.
     print(report.format_snapshot(snap))
+    return 0
+
+
+def _cmd_startup(args) -> int:
+    items = startup.collect_startup()
+    if getattr(args, "json", False):
+        _print_json(serialize.startup_to_list(items))
+    else:
+        print(report.format_startup(items))
     return 0
 
 
 def _cmd_clean(args) -> int:
     result = cleanup.clean(min_age_days=args.min_age, apply=args.yes)
-    print(report.format_clean(result, args.min_age))
+    if getattr(args, "json", False):
+        _print_json(serialize.clean_to_dict(result))
+    else:
+        print(report.format_clean(result, args.min_age))
     return 0
 
 
+_MENU = """
+computa — what would you like to do?
+
+  1) Scan      full health snapshot + advice
+  2) Doctor    just the recommendations
+  3) Top       what's using CPU / memory right now
+  4) Startup   programs that launch at login
+  5) Clean     PREVIEW reclaimable cache/temp (safe — deletes nothing)
+  6) Clean now actually delete old cache/temp (asks to confirm)
+  q) Quit
+"""
+
+
+def _cmd_menu(args) -> int:
+    while True:
+        print(_MENU)
+        try:
+            choice = input("Enter choice: ").strip().lower()
+        except EOFError:
+            return 0
+        if choice in ("q", "quit", "exit", ""):
+            return 0
+        print()
+        if choice == "1":
+            _cmd_scan(argparse.Namespace(json=False, fast=False, advice=True))
+        elif choice == "2":
+            _cmd_doctor(argparse.Namespace(json=False))
+        elif choice == "3":
+            _cmd_top(argparse.Namespace(json=False))
+        elif choice == "4":
+            _cmd_startup(argparse.Namespace(json=False))
+        elif choice == "5":
+            _cmd_clean(argparse.Namespace(json=False, min_age=7.0, yes=False))
+        elif choice == "6":
+            confirm = input("Delete old cache/temp files? Type 'yes' to confirm: ")
+            _cmd_clean(argparse.Namespace(
+                json=False, min_age=7.0, yes=confirm.strip().lower() == "yes"))
+        else:
+            print(f"Unknown choice: {choice!r}")
+        try:
+            input("\nPress Enter to return to the menu...")
+        except EOFError:
+            return 0
+        print()
+
+
 def build_parser() -> argparse.ArgumentParser:
+    # shared --json flag, attached to every subcommand
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--json", action="store_true",
+                        help="Output machine-readable JSON instead of text.")
+
     p = argparse.ArgumentParser(
         prog="computa",
         description="Scan your computer and get help making it run faster.",
@@ -50,27 +130,37 @@ def build_parser() -> argparse.ArgumentParser:
                    version=f"computa {__version__}")
     sub = p.add_subparsers(dest="command")
 
-    s = sub.add_parser("scan", help="Show a full system health snapshot.")
+    s = sub.add_parser("scan", parents=[common],
+                       help="Show a full system health snapshot.")
     s.add_argument("--fast", action="store_true",
                    help="Skip per-process scan (quicker, no ~0.5s sample).")
     s.add_argument("--no-advice", dest="advice", action="store_false",
                    help="Don't append recommendations after the snapshot.")
     s.set_defaults(func=_cmd_scan, advice=True)
 
-    d = sub.add_parser("doctor",
+    d = sub.add_parser("doctor", parents=[common],
                        help="Diagnose issues and print prioritized advice.")
     d.set_defaults(func=_cmd_doctor)
 
-    t = sub.add_parser("top", help="Show what's using CPU/memory right now.")
+    t = sub.add_parser("top", parents=[common],
+                       help="Show what's using CPU/memory right now.")
     t.set_defaults(func=_cmd_top)
 
-    c = sub.add_parser("clean",
+    u = sub.add_parser("startup", parents=[common],
+                       help="List programs that launch at login/boot.")
+    u.set_defaults(func=_cmd_startup)
+
+    c = sub.add_parser("clean", parents=[common],
                        help="Reclaim cache/temp space (dry-run unless --yes).")
     c.add_argument("--min-age", type=float, default=7.0,
                    help="Only remove files older than N days (default: 7).")
     c.add_argument("--yes", action="store_true",
                    help="Actually delete (default is a safe preview).")
     c.set_defaults(func=_cmd_clean)
+
+    m = sub.add_parser("menu",
+                       help="Interactive menu (no commands to remember).")
+    m.set_defaults(func=_cmd_menu)
 
     return p
 
@@ -79,7 +169,6 @@ def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
-        # default to scan when no subcommand is given
         args = parser.parse_args(["scan"])
     try:
         return args.func(args)

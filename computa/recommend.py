@@ -26,6 +26,7 @@ TEMP_WARN_BYTES = 2 * 1024 ** 3       # 2 GB
 TEMP_INFO_BYTES = 512 * 1024 ** 2     # 512 MB
 PROC_MEM_WARN = 25.0                   # single process using >25% RAM
 UPTIME_INFO_DAYS = 7
+STARTUP_INFO_COUNT = 20                 # many login items slow boot
 # Ignore tiny filesystems (pseudo/mount artifacts, read-only system images).
 # A "100% full" 768 KB mount is noise, not a real storage problem.
 DISK_MIN_TOTAL = 4 * 1024 ** 3         # 4 GB
@@ -130,6 +131,17 @@ def analyze(snap: Snapshot) -> List[Recommendation]:
             f"Some reclaimable cache/temp space ({human_bytes(total_temp)})",
             "Clearing these is safe and can free disk space.",
             "Run `computa clean` to preview what can be removed.",
+        ))
+
+    # --- Startup programs ---
+    enabled_startup = [s for s in snap.startup if s.enabled]
+    if len(enabled_startup) >= STARTUP_INFO_COUNT:
+        recs.append(Recommendation(
+            INFO,
+            f"Many startup programs ({len(enabled_startup)})",
+            "Programs that launch at login lengthen boot time and keep running "
+            "in the background.",
+            "Review them with `computa startup` and disable the ones you don't need.",
         ))
 
     # --- Uptime ---
