@@ -5,8 +5,8 @@ import argparse
 import json
 import sys
 
-from . import (__version__, cleanup, history, recommend, report, serialize,
-               startup, system)
+from . import (__version__, bigfiles, cleanup, history, programs, recommend,
+               report, serialize, startup, system)
 
 
 def _print_json(obj) -> None:
@@ -140,6 +140,80 @@ def _cmd_sweep(args) -> int:
     return 2 if any(r.severity == recommend.CRITICAL for r in recs) else 0
 
 
+def _cmd_large(args) -> int:
+    import os
+    root = args.path or os.path.expanduser("~")
+    files = bigfiles.find_large_files(
+        root, top=args.top, min_size=int(args.min_size * 1024 * 1024))
+    if getattr(args, "json", False):
+        _print_json(serialize.big_files_to_list(files))
+        return 0
+    print(report.format_large(files, root))
+    if getattr(args, "delete", False) and files:
+        _interactive_delete(files)
+    return 0
+
+
+def _interactive_delete(files) -> None:
+    """Let the user pick big files to delete, with an explicit confirmation."""
+    print()
+    print("Enter the numbers of files to DELETE (e.g. 1,3,4), or press Enter "
+          "to cancel:")
+    try:
+        raw = input("> ").strip()
+    except EOFError:
+        return
+    if not raw:
+        print("Cancelled — nothing deleted.")
+        return
+    chosen = []
+    for tok in raw.replace(" ", ",").split(","):
+        if tok.isdigit():
+            idx = int(tok)
+            if 1 <= idx <= len(files):
+                chosen.append(files[idx - 1])
+    if not chosen:
+        print("No valid numbers — nothing deleted.")
+        return
+    total = sum(f.size for f in chosen)
+    print()
+    print(f"About to delete {len(chosen)} file(s), freeing "
+          f"{report.human_bytes(total)}:")
+    for f in chosen:
+        print(f"   {report.human_bytes(f.size):>9}  {f.path}")
+    try:
+        confirm = input("\nType 'DELETE' (in capitals) to confirm: ").strip()
+    except EOFError:
+        return
+    if confirm != "DELETE":
+        print("Not confirmed — nothing deleted.")
+        return
+    removed, freed, errors, skipped = bigfiles.delete_files([f.path for f in chosen])
+    print(f"\nDeleted {removed} file(s), freed {report.human_bytes(freed)}.")
+    if skipped:
+        print(f"Skipped {skipped} protected/missing file(s).")
+    if errors:
+        print(f"{errors} file(s) could not be deleted (in use or no permission).")
+
+
+def _cmd_programs(args) -> int:
+    progs = programs.list_programs()
+    if getattr(args, "json", False):
+        _print_json(serialize.programs_to_list(progs))
+    else:
+        print(report.format_programs(progs))
+    return 0
+
+
+def _cmd_recycle(args) -> int:
+    if getattr(args, "empty", False):
+        ok, msg = bigfiles.empty_recycle_bin()
+        print(msg)
+        return 0 if ok else 1
+    print("Use `computa recycle --empty` to empty the Recycle Bin / Trash.")
+    return 0
+
+
 _MENU = """
 computa — what would you like to do?
 
@@ -152,6 +226,9 @@ computa — what would you like to do?
   7) Clean now actually delete old cache/temp (asks to confirm)
   8) Sweep     FULL deep sweep: scan + diagnose + deep-clean preview
   9) Deep clean delete browser caches, crash dumps, logs, trash (confirms)
+  b) Big files find the largest files eating your space (and delete, confirmed)
+  p) Programs  installed programs by size (to spot what to uninstall)
+  r) Recycle   empty the Recycle Bin / Trash
   q) Quit
 """
 
@@ -195,6 +272,17 @@ def _cmd_menu(args) -> int:
             _cmd_clean(argparse.Namespace(
                 json=False, min_age=None, deep=True,
                 yes=confirm.strip().lower() == "yes"))
+        elif choice == "b":
+            _cmd_large(argparse.Namespace(
+                json=False, path=None, top=25, min_size=100.0, delete=True))
+        elif choice == "p":
+            _cmd_programs(argparse.Namespace(json=False))
+        elif choice == "r":
+            confirm = input("Empty the Recycle Bin / Trash? Type 'yes': ")
+            if confirm.strip().lower() == "yes":
+                _cmd_recycle(argparse.Namespace(empty=True))
+            else:
+                print("Cancelled.")
         else:
             print(f"Unknown choice: {choice!r}")
         try:
@@ -261,6 +349,29 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--yes", action="store_true",
                    help="Actually delete (default is a safe preview).")
     c.set_defaults(func=_cmd_clean)
+
+    lg = sub.add_parser("large", parents=[common],
+                        help="Find the largest files eating disk space.")
+    lg.add_argument("path", nargs="?", default=None,
+                    help="Folder to scan (default: your home folder).")
+    lg.add_argument("--top", type=int, default=25,
+                    help="How many of the biggest files to show (default: 25).")
+    lg.add_argument("--min-size", type=float, default=100.0,
+                    help="Ignore files smaller than N megabytes (default: 100).")
+    lg.add_argument("--delete", action="store_true",
+                    help="After listing, interactively delete chosen files "
+                         "(asks for an explicit DELETE confirmation).")
+    lg.set_defaults(func=_cmd_large)
+
+    pr = sub.add_parser("programs", parents=[common],
+                        help="List installed programs by size (Windows).")
+    pr.set_defaults(func=_cmd_programs)
+
+    rc = sub.add_parser("recycle", parents=[common],
+                        help="Empty the Recycle Bin / Trash.")
+    rc.add_argument("--empty", action="store_true",
+                    help="Actually empty it (otherwise just prints how).")
+    rc.set_defaults(func=_cmd_recycle)
 
     sw = sub.add_parser("sweep", parents=[common],
                         help="Full sweep: scan + diagnose + deep-clean preview.")

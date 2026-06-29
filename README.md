@@ -56,6 +56,9 @@ computa scan
 | `computa diff`     | Show what changed since your last scan (disk, memory, cache/temp, startup items). |
 | `computa clean`    | Reclaim cache/temp space, with a **per-app breakdown** (e.g. "Chrome: 1.2 GB"). `--deep` widens the sweep. **Dry-run by default.** |
 | `computa sweep`    | **Full sweep** — scan + diagnose + deep-clean preview in one pass. The "scrub everything" command. |
+| `computa large`    | Find the **largest files** eating your disk; `--delete` removes chosen ones after a typed confirmation. |
+| `computa programs` | List installed programs by **size** (Windows), to spot big apps/games to uninstall. |
+| `computa recycle`  | `--empty` empties the Recycle Bin / Trash. |
 | `computa menu`     | Interactive menu — no commands to remember (what the launchers open). |
 
 Every reporting command also accepts **`--json`** for machine-readable output
@@ -79,6 +82,11 @@ computa clean --deep      # PREVIEW a deeper sweep (browser caches, dumps, logs,
 computa clean --deep --yes         # perform the deep clean
 computa sweep             # full scan + diagnose + deep-clean preview, one shot
 computa sweep --yes       # ...and actually run the deep clean
+computa large             # find the biggest files in your home folder
+computa large C:\ --min-size 500    # biggest files >500 MB on the whole C: drive
+computa large --delete    # ...then pick which to delete (asks to type DELETE)
+computa programs          # installed programs by size (Windows)
+computa recycle --empty   # empty the Recycle Bin / Trash
 computa menu              # guided menu, no flags to remember
 ```
 
@@ -117,6 +125,20 @@ your Trash/Recycle Bin when you pass `--yes`, so glance at the preview first.
 > program files, or remove anything outside these known junk locations. "Registry
 > cleaning" is risky snake-oil and is deliberately absent.
 
+### Deleting large files (`computa large --delete`)
+
+This is more powerful than `clean` — it can remove big files anywhere you can
+reach — so it's guarded hard:
+
+- A **protected-paths guard** blocks anything inside system/program directories
+  (`Windows`, `Program Files`, `ProgramData` on Windows; `/usr`, `/System`,
+  `/Library`, etc. elsewhere). Those files are never even *listed* as deletable,
+  and every delete re-checks the guard at the moment of removal.
+- Deletion is **interactive**: it lists the big files, you pick which by number,
+  and nothing is removed until you type **`DELETE`** in capitals.
+- To remove an installed program or game, use your **OS uninstaller**
+  (`computa programs` shows you the biggest ones) rather than deleting files.
+
 ---
 
 ## How it works
@@ -127,6 +149,8 @@ computa/
   startup.py     cross-platform login/boot program inspection + enable/disable
   history.py     save scan baselines and compute "what changed since last scan"
   walk.py        fast scandir-based directory traversal (sizing + cleanup)
+  bigfiles.py    find largest files + guarded deletion + empty recycle bin
+  programs.py    list installed programs by size (Windows)
   recommend.py   pure logic: Snapshot -> prioritized recommendations
   cleanup.py     safe discovery + removal of old cache/temp files (+ deep mode)
   serialize.py   convert data objects into JSON-ready dicts (--json output)

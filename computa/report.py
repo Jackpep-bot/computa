@@ -114,6 +114,39 @@ def format_startup(items) -> str:
     return "\n".join(lines)
 
 
+def format_large(files, root: str) -> str:
+    if not files:
+        return (f"No files larger than the threshold were found under {root}.\n"
+                "Try a lower --min-size, or point it at another folder.")
+    total = sum(f.size for f in files)
+    lines = [_head(f"Largest files under {root} "
+                   f"({len(files)} shown, {human_bytes(total)} total):"), ""]
+    for i, f in enumerate(files, 1):
+        lines.append(f"  {i:>3}. {human_bytes(f.size):>9}  "
+                     f"({f.age_days:.0f}d old)  {f.path}")
+    lines.append("")
+    lines.append(_c("  Tip: to remove an installed game/app, uninstall it via "
+                    "your OS instead of deleting files.", "dim"))
+    return "\n".join(lines)
+
+
+def format_programs(progs) -> str:
+    if not progs:
+        return ("No installed-program info available (this listing is "
+                "Windows-only).")
+    sized = [p for p in progs if p.size_bytes > 0]
+    shown = sized[:20] if sized else progs[:20]
+    lines = [_head(f"Installed programs by size ({len(progs)} total, "
+                   "largest first):"), ""]
+    for p in shown:
+        size = human_bytes(p.size_bytes) if p.size_bytes else "   ?    "
+        lines.append(f"  {size:>9}  {p.name}")
+    lines.append("")
+    lines.append(_c("  To uninstall: Start → 'Add or remove programs', then "
+                    "remove the big ones you don't use.", "dim"))
+    return "\n".join(lines)
+
+
 def format_recommendations(recs: List[Recommendation]) -> str:
     if not recs:
         return _c("No problems found — your system looks healthy. ✔", INFO)

@@ -53,8 +53,9 @@ def analyze(snap: Snapshot) -> List[Recommendation]:
                 f"Disk {d.mount} is almost full ({d.percent:.0f}%)",
                 f"{human_bytes(d.free)} free of {human_bytes(d.total)}. "
                 "A nearly-full disk slows everything and can stop apps from saving.",
-                "Free space: run `computa clean`, empty the trash, and remove "
-                "large unused files.",
+                "Free space: `computa clean --deep` (caches), `computa large` "
+                "(find big files), `computa programs` (uninstall big apps), and "
+                "`computa recycle --empty`.",
             ))
         elif d.percent >= DISK_WARN:
             recs.append(Recommendation(

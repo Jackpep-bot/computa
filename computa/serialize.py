@@ -34,6 +34,14 @@ def startup_to_list(items: List[StartupItem]) -> List[dict]:
     return [asdict(i) for i in items]
 
 
+def big_files_to_list(files) -> List[dict]:
+    return [asdict(f) for f in files]
+
+
+def programs_to_list(progs) -> List[dict]:
+    return [asdict(p) for p in progs]
+
+
 def diff_to_dict(diff) -> dict:
     """Serialize a history.Diff, including its computed delta properties."""
     d = asdict(diff)
