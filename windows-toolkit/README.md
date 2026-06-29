@@ -100,6 +100,15 @@ you to back up first**.
 - **cleanup.ps1** `[-Confirm]` — clears `%TEMP%`, Windows Temp, browser caches,
   Recycle Bin, and the Windows Update download cache. **DRY-RUN by default**
   (shows what would be freed); `-Confirm` actually deletes. Logs everything.
+- **app-uninstall.ps1** `[-Confirm] [-Only <patterns>] [-Keep <patterns>] [-NukeSteamLibraries]`
+  — automated bulk uninstaller. **DRY-RUN by default** (lists exactly what would
+  be removed); `-Confirm` actually uninstalls. A **hard protected list** means it
+  can never remove Windows, NVIDIA/Realtek/Intel/AMD drivers, Visual C++/.NET/
+  DirectX runtimes, Edge, **Riot Vanguard, VALORANT, Claude, or Google Chrome**.
+  MSI apps uninstall silently; some apps may briefly show their own uninstaller.
+  `-NukeSteamLibraries` also deletes Steam game files to reclaim that space.
+  Use `-Only 'Discord','Spotify'` to target specific apps, or `-Keep 'Discord'`
+  to protect extras.
 
 ### Shared
 - **lib/Common.ps1** — shared helpers (logging, size formatting, SMART health,

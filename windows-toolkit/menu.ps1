@@ -79,6 +79,8 @@ function Show-Menu {
     Write-Host '  15) System repair - SFC/DISM scan / repair'
     Write-Host '  CLEAN (last)'
     Write-Host '  16) Cleanup junk - preview, then APPLY to delete'
+    Write-Host '  17) Uninstall apps - remove ALL non-essential programs +'
+    Write-Host '                       Steam games (keeps Valorant/Claude/Chrome/drivers)'
     Write-Host '   q) Quit'
     Write-Host ''
 }
@@ -103,6 +105,7 @@ while ($true) {
         '14' { Invoke-Destructive 'optimize-drives.ps1' @{} }
         '15' { Invoke-Destructive 'system-repair.ps1' @{} }
         '16' { Invoke-Destructive 'cleanup.ps1' @{} '  This will permanently delete junk files when applied.' }
+        '17' { Invoke-Destructive 'app-uninstall.ps1' @{ NukeSteamLibraries = $true } '  This UNINSTALLS all non-essential programs and DELETES Steam game files. Keeps Valorant, Claude, Chrome, Windows and drivers.' }
         'q'  { Write-Host 'Bye.'; return }
         ''   { }
         default { Write-Host ('Unknown option: {0}' -f $choice) -ForegroundColor Yellow }
