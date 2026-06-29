@@ -10,28 +10,28 @@ param()
 
 $log = Get-LogPath -Name 'diagnose'
 $lines = New-Object System.Collections.Generic.List[string]
-function R { param([string]$s = '') $lines.Add($s) }
+function Add-Line { param([string]$s = '') $lines.Add($s) }
 
-R '============================================================'
-R ' computa :: System Health Report (read-only)'
-R (' Generated: {0}' -f (Get-Date))
-R '============================================================'
-R ''
+Add-Line '============================================================'
+Add-Line ' computa :: System Health Report (read-only)'
+Add-Line (' Generated: {0}' -f (Get-Date))
+Add-Line '============================================================'
+Add-Line ''
 
 # --- OS / uptime ---
 try {
     $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
     $boot = $os.LastBootUpTime
     $up = (Get-Date) - $boot
-    R ('Windows : {0} (build {1})' -f $os.Caption.Trim(), $os.BuildNumber)
-    R ('Uptime  : {0}d {1}h {2}m  (last boot {3})' -f $up.Days, $up.Hours, $up.Minutes, $boot)
-} catch { R 'Windows : (could not read OS info)' }
+    Add-Line ('Windows : {0} (build {1})' -f $os.Caption.Trim(), $os.BuildNumber)
+    Add-Line ('Uptime  : {0}d {1}h {2}m  (last boot {3})' -f $up.Days, $up.Hours, $up.Minutes, $boot)
+} catch { Add-Line 'Windows : (could not read OS info)' }
 
 # --- CPU ---
 try {
     $cpu = Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1
-    R ('CPU     : {0}  ({1} cores / {2} threads)' -f $cpu.Name.Trim(), $cpu.NumberOfCores, $cpu.NumberOfLogicalProcessors)
-} catch { R 'CPU     : (unknown)' }
+    Add-Line ('CPU     : {0}  ({1} cores / {2} threads)' -f $cpu.Name.Trim(), $cpu.NumberOfCores, $cpu.NumberOfLogicalProcessors)
+} catch { Add-Line 'CPU     : (unknown)' }
 
 # --- RAM ---
 try {
@@ -41,62 +41,62 @@ try {
     $usedB  = $totalB - $freeB
     $pct = 0
     if ($totalB -gt 0) { $pct = [math]::Round($usedB / $totalB * 100, 0) }
-    R ('RAM     : {0} used of {1}  ({2}% in use)' -f (Format-Size $usedB), (Format-Size $totalB), $pct)
-} catch { R 'RAM     : (unknown)' }
+    Add-Line ('RAM     : {0} used of {1}  ({2}% in use)' -f (Format-Size $usedB), (Format-Size $totalB), $pct)
+} catch { Add-Line 'RAM     : (unknown)' }
 
-R ''
-R 'Disks ------------------------------------------------------'
+Add-Line ''
+Add-Line 'Disks ------------------------------------------------------'
 try {
     Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction Stop | ForEach-Object {
         $size = [double]$_.Size
         $free = [double]$_.FreeSpace
         $pct = 0
         if ($size -gt 0) { $pct = [math]::Round(($size - $free) / $size * 100, 1) }
-        R ('  {0}  {1,9} free of {2,9}   {3,5}% full' -f $_.DeviceID, (Format-Size $free), (Format-Size $size), $pct)
+        Add-Line ('  {0}  {1,9} free of {2,9}   {3,5}% full' -f $_.DeviceID, (Format-Size $free), (Format-Size $size), $pct)
     }
-} catch { R '  (could not read disks)' }
+} catch { Add-Line '  (could not read disks)' }
 
-R ''
-R 'Disk health (SMART) ----------------------------------------'
+Add-Line ''
+Add-Line 'Disk health (SMART) ----------------------------------------'
 $health = Get-DiskHealth
 if (@($health).Count -eq 0) {
-    R '  (could not read SMART/health status on this system)'
+    Add-Line '  (could not read SMART/health status on this system)'
 } else {
     foreach ($d in $health) {
         $sz = 'n/a'
         if ($d.SizeBytes) { $sz = Format-Size $d.SizeBytes }
-        R ('  {0,-32} {1,-8} {2,9}  status: {3}' -f $d.Name, $d.MediaType, $sz, $d.HealthStatus)
+        Add-Line ('  {0,-32} {1,-8} {2,9}  status: {3}' -f $d.Name, $d.MediaType, $sz, $d.HealthStatus)
     }
 }
 
-R ''
-R 'Top 10 processes by RAM ------------------------------------'
+Add-Line ''
+Add-Line 'Top 10 processes by RAM ------------------------------------'
 try {
     Get-Process -ErrorAction Stop | Sort-Object WorkingSet64 -Descending |
         Select-Object -First 10 | ForEach-Object {
-            R ('  {0,10}  {1}' -f (Format-Size $_.WorkingSet64), $_.ProcessName)
+            Add-Line ('  {0,10}  {1}' -f (Format-Size $_.WorkingSet64), $_.ProcessName)
         }
-} catch { R '  (could not read processes)' }
+} catch { Add-Line '  (could not read processes)' }
 
-R ''
-R 'Top 10 processes by CPU time -------------------------------'
+Add-Line ''
+Add-Line 'Top 10 processes by CPU time -------------------------------'
 try {
     Get-Process -ErrorAction Stop | Sort-Object CPU -Descending |
         Select-Object -First 10 | ForEach-Object {
             $c = 0
             if ($_.CPU) { $c = [math]::Round($_.CPU, 0) }
-            R ('  {0,9}s  {1}' -f $c, $_.ProcessName)
+            Add-Line ('  {0,9}s  {1}' -f $c, $_.ProcessName)
         }
-} catch { R '  (could not read processes)' }
+} catch { Add-Line '  (could not read processes)' }
 
-R ''
-R 'Startup -----------------------------------------------------'
+Add-Line ''
+Add-Line 'Startup -----------------------------------------------------'
 try {
     $count = @(Get-StartupEntries).Count
-    R ('  {0} startup entries (run startup-audit.ps1 for the full list)' -f $count)
-} catch { R '  (could not read startup entries)' }
+    Add-Line ('  {0} startup entries (run startup-audit.ps1 for the full list)' -f $count)
+} catch { Add-Line '  (could not read startup entries)' }
 
-R ''
-R ('Report saved to: {0}' -f $log)
+Add-Line ''
+Add-Line ('Report saved to: {0}' -f $log)
 
 $lines | Tee-Object -FilePath $log
